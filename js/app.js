@@ -35,6 +35,7 @@ let stream = null;
 let scanning = false;
 let rafId = null;
 let barcodeDetector = null;
+let processing = false; // true while running the pre-confirmation animation
 
 // Detect BarcodeDetector API
 if ('BarcodeDetector' in window) {
@@ -131,7 +132,8 @@ async function scanWithBarcodeDetector() {
     const detections = await barcodeDetector.detect(video);
     if (detections && detections.length) {
       const raw = detections[0].rawValue;
-      handleDetectedInput(raw, 'camera');
+      // run pre-confirmation animation and pause before showing modal
+      if (!processing) handleDetectionFeedback(raw, 'camera');
       return;
     }
   } catch (err) {
@@ -153,7 +155,7 @@ function scanWithJsQR() {
     if (window.jsQR) {
       const code = jsQR(imageData.data, imageData.width, imageData.height);
       if (code) {
-        handleDetectedInput(code.data, 'camera');
+        if (!processing) handleDetectionFeedback(code.data, 'camera');
         return;
       }
     }
@@ -170,7 +172,40 @@ function handleDetectedInput(text, source) {
   const success = trimmed.length >= 3; // adjust as needed
   const title = success ? 'input berhasil' : 'input gagal';
   const message = success ? 'mohon masukkan paket pada box' : 'mohon coba lagi atau cek kembali penerima';
+  // direct path for callers that want immediate confirmation
   showConfirmation(success, title, message, trimmed, source);
+}
+
+/**
+ * Handle a detection by pausing scanning, playing a short animation in the scan area,
+ * then showing the confirmation modal. This prevents the modal from appearing instantly
+ * and gives the user a short visual 'scanning' feedback.
+ */
+function handleDetectionFeedback(text, source) {
+  if (processing) return;
+  processing = true;
+
+  // pause detection loop
+  scanning = false;
+
+  // add scanning class to scan-area for animation
+  const scanArea = document.querySelector('.scan-area');
+  if (scanArea) scanArea.classList.add('scanning');
+
+  // small animation duration before showing confirmation (ms)
+  const ANIM_DURATION = 900;
+
+  // after the animation, show confirmation and stop camera
+  setTimeout(() => {
+    // remove animation class
+    if (scanArea) scanArea.classList.remove('scanning');
+
+    // now show confirmation (this will stop the camera and show modal)
+    handleDetectedInput(text, source);
+
+    // processing false will be reset when modal closes (or immediately here to allow further use)
+    processing = false;
+  }, ANIM_DURATION);
 }
 
 function showConfirmation(success, title, message, payload, source) {
@@ -242,7 +277,10 @@ function handleFile(e) {
       if (window.jsQR) {
         const code = jsQR(imageData.data, imageData.width, imageData.height);
         if (code) {
-          handleDetectedInput(code.data, 'file');
+          // for file input we also show the brief animation then confirmation
+          if (!processing) {
+            handleDetectionFeedback(code.data, 'file');
+          }
           return;
         }
       }
@@ -264,7 +302,8 @@ manualForm.addEventListener('submit', (ev) => {
   }
   // Here we can validate or send to server. For now, treat as success if resi length ok
   const combined = `${resi} | ${recipient}`;
-  handleDetectedInput(combined, 'manual');
+  // Play detection feedback before showing confirmation
+  if (!processing) handleDetectionFeedback(combined, 'manual');
 });
 
 // Cleanup
