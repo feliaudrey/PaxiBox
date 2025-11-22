@@ -57,7 +57,7 @@ function showView(name) {
 }
 
 tabs.forEach(t => t.addEventListener('click', () => showView(t.dataset.view)));
-closeBtn.addEventListener('click', () => showView('scan'));
+if (closeBtn) closeBtn.addEventListener('click', () => showView('scan'));
 
 confirmClose.addEventListener('click', () => {
   // After confirmation, just hide the modal (showView will restart scan if on scan tab)
