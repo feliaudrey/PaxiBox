@@ -18,7 +18,7 @@
       <button class="tab" data-view="manual">INPUT MANUAL</button>
     </nav>
 
-    <!-- Scan view -->
+    <!-- Scan -->
     <section id="scanView" class="view">
       <div class="camera-area">
         <video id="video" playsinline autoplay muted></video>
@@ -43,7 +43,7 @@
       </div>
     </section>
 
-    <!-- Manual input view -->
+    <!-- Manual input -->
     <section id="manualView" class="view" hidden>
       <form id="manualForm" class="manual-form">
         <label>Nomor resi
@@ -73,7 +73,7 @@
     </div>
   </div>
 
-  <!-- jsQR fallback from unpkg: only used if BarcodeDetector is not supported -->
+  <!-- only used if BarcodeDetector is not supported -->
   <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
   <script src="js/app.js"></script>
 </body>

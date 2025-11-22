@@ -1,12 +1,3 @@
-/* app.js — mobile QR scanner with 3 views: scan, manual input, confirmation
-
-   Behavior:
-   - Attempts to use BarcodeDetector (native) if available.
-   - Falls back to jsQR by capturing video frames to a canvas.
-   - Provides a manual input form.
-   - Shows a confirmation view (success/failure) after scan or manual submit.
-*/
-
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const startBtn = document.getElementById('startBtn');
@@ -18,7 +9,7 @@ const startCameraBtn = document.getElementById('startCameraBtn');
 const tabs = document.querySelectorAll('.tab');
 const scanView = document.getElementById('scanView');
 const manualView = document.getElementById('manualView');
-// Modal elements (confirmation popup)
+// confirmation popup
 const confirmModal = document.getElementById('confirmModal');
 const confirmIcon = document.getElementById('confirmIcon');
 const confirmTitle = document.getElementById('confirmTitle');
@@ -129,12 +120,14 @@ function stopCamera() {
 async function scanWithBarcodeDetector() {
   if (!scanning || !barcodeDetector) return;
   try {
-    const detections = await barcodeDetector.detect(video);
-    if (detections && detections.length) {
-      const raw = detections[0].rawValue;
-      // run pre-confirmation animation and pause before showing modal
-      if (!processing) handleDetectionFeedback(raw, 'camera');
-      return;
+    // draw only the scan-area crop to canvas then detect from that canvas
+    if (drawCropToCanvas()) {
+      const detections = await barcodeDetector.detect(canvas);
+      if (detections && detections.length) {
+        const raw = detections[0].rawValue;
+        if (!processing) handleDetectionFeedback(raw, 'camera');
+        return;
+      }
     }
   } catch (err) {
     console.warn('BarcodeDetector failed, falling back to jsQR', err);
@@ -148,9 +141,13 @@ function scanWithJsQR() {
   if (!scanning) return;
   const ctx = canvas.getContext('2d');
   try {
-    canvas.width = video.videoWidth || canvas.width;
-    canvas.height = video.videoHeight || canvas.height;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    // draw crop of video corresponding to the visible .scan-area
+    if (!drawCropToCanvas()) {
+      // fallback to full frame if crop failed
+      canvas.width = video.videoWidth || canvas.width;
+      canvas.height = video.videoHeight || canvas.height;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    }
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     if (window.jsQR) {
       const code = jsQR(imageData.data, imageData.width, imageData.height);
@@ -163,6 +160,42 @@ function scanWithJsQR() {
     console.error('scanWithJsQR error', err);
   }
   rafId = requestAnimationFrame(scanWithJsQR);
+}
+
+/**
+ * Draw the portion of the video that corresponds to the centered .scan-area
+ * into the global `canvas`. Returns true on success, false if coordinates are not ready.
+ */
+function drawCropToCanvas() {
+  const scanArea = document.querySelector('.scan-area');
+  if (!video || !scanArea || !canvas) return false;
+  const videoRect = video.getBoundingClientRect();
+  const areaRect = scanArea.getBoundingClientRect();
+  // video may not have initialized dimensions yet
+  if (!video.videoWidth || !video.videoHeight || videoRect.width === 0 || videoRect.height === 0) return false;
+
+  const sx = Math.max(0, Math.floor((areaRect.left - videoRect.left) * (video.videoWidth / videoRect.width)));
+  const sy = Math.max(0, Math.floor((areaRect.top - videoRect.top) * (video.videoHeight / videoRect.height)));
+  const sWidth = Math.max(16, Math.floor(areaRect.width * (video.videoWidth / videoRect.width)));
+  const sHeight = Math.max(16, Math.floor(areaRect.height * (video.videoHeight / videoRect.height)));
+
+  // clamp to video dimensions
+  const sxClamped = Math.min(sx, video.videoWidth - 1);
+  const syClamped = Math.min(sy, video.videoHeight - 1);
+  const sWClamped = Math.min(sWidth, video.videoWidth - sxClamped);
+  const sHClamped = Math.min(sHeight, video.videoHeight - syClamped);
+
+  // set canvas to crop size
+  canvas.width = sWClamped;
+  canvas.height = sHClamped;
+  const ctx = canvas.getContext('2d');
+  try {
+    ctx.drawImage(video, sxClamped, syClamped, sWClamped, sHClamped, 0, 0, sWClamped, sHClamped);
+    return true;
+  } catch (err) {
+    console.warn('drawCropToCanvas failed', err);
+    return false;
+  }
 }
 
 // --- Handle detected input (from camera or file or manual) ---
@@ -185,27 +218,11 @@ function handleDetectionFeedback(text, source) {
   if (processing) return;
   processing = true;
 
-  // pause detection loop
+  // pause detection loop immediately
   scanning = false;
 
-  // add scanning class to scan-area for animation
-  const scanArea = document.querySelector('.scan-area');
-  if (scanArea) scanArea.classList.add('scanning');
-
-  // small animation duration before showing confirmation (ms)
-  const ANIM_DURATION = 900;
-
-  // after the animation, show confirmation and stop camera
-  setTimeout(() => {
-    // remove animation class
-    if (scanArea) scanArea.classList.remove('scanning');
-
-    // now show confirmation (this will stop the camera and show modal)
-    handleDetectedInput(text, source);
-
-    // processing false will be reset when modal closes (or immediately here to allow further use)
-    processing = false;
-  }, ANIM_DURATION);
+  // immediately show confirmation (no pre-confirmation animation)
+  handleDetectedInput(text, source);
 }
 
 function showConfirmation(success, title, message, payload, source) {
@@ -242,6 +259,8 @@ function hideConfirmation() {
   const activeTab = Array.from(tabs).find(t => t.classList.contains('active'));
   if (activeTab && activeTab.dataset.view === 'scan') {
     // slight delay to allow modal to hide
+    // reset processing flag then try to restart camera
+    processing = false;
     setTimeout(() => startCamera().catch(() => { if (startOverlay) startOverlay.hidden = false; }), 250);
   }
 }
