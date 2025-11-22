@@ -321,6 +321,11 @@ manualForm.addEventListener('submit', (ev) => {
   }
   // Here we can validate or send to server. For now, treat as success if resi length ok
   const combined = `${resi} | ${recipient}`;
+  // switch to scan view so modal close will restart camera, then play detection feedback
+  showView('scan');
+  // clear manual inputs so they don't linger
+  resiInput.value = '';
+  recipientInput.value = '';
   // Play detection feedback before showing confirmation
   if (!processing) handleDetectionFeedback(combined, 'manual');
 });
