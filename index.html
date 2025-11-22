@@ -28,6 +28,11 @@
           <div class="scan-line"></div>
         </div>
 
+        <!-- Start overlay shown when camera can't auto-start or needs a user gesture -->
+        <div id="startOverlay" class="start-overlay" hidden>
+          <button id="startCameraBtn" class="start-camera-btn">Tap to start camera</button>
+        </div>
+
         <div class="controls overlay-controls">
           <label class="file-label btn upload" aria-label="Upload image">
             <input id="fileInput" type="file" accept="image/*" />
@@ -58,12 +63,12 @@
   <!-- Modal confirmation popup -->
   <div id="confirmModal" class="modal" hidden>
     <div class="modal-content">
-      <button id="confirmClose" class="modal-close" aria-label="close">✕</button>
+      <button id="confirmClose" class="modal-close" aria-label="close" type="button">✕</button>
       <div id="confirmIcon" class="confirm-icon" aria-hidden="true"></div>
       <h2 id="confirmTitle">input berhasil</h2>
       <p id="confirmMessage">mohon masukkan paket pada box</p>
       <div class="confirm-actions">
-        <button id="confirmOk">OK</button>
+        <button id="confirmOk" type="button">OK</button>
       </div>
     </div>
   </div>

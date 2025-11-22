@@ -27,6 +27,11 @@ video{width:100%;height:100%;object-fit:cover;display:block;filter:brightness(1.
 .overlay-controls svg{color:var(--accent);opacity:0.95}
 .overlay-controls .upload-label{font-weight:700}
 
+/* Start overlay when permissions/auto-start blocked */
+.start-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:auto}
+.start-overlay .start-camera-btn{padding:14px 20px;border-radius:999px;border:0;background:linear-gradient(180deg,var(--accent),#047857);color:white;font-weight:700;box-shadow:0 12px 30px rgba(5,150,105,0.12);font-size:16px}
+.start-overlay[hidden]{display:none}
+
 .app-header{padding:6px 8px}
 .app-header h1{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; font-weight:700;letter-spacing:0.2px}
 .wrap{width:100%;max-width:460px;padding:12px}
@@ -64,3 +69,10 @@ video{width:100%;height:100%;object-fit:cover;display:block;filter:brightness(1.
 .modal-close{position:absolute;right:12px;top:8px;background:transparent;border:0;color:var(--muted);font-size:1.2rem;padding:6px;cursor:pointer}
 .confirm-actions{margin-top:14px}
 .confirm-actions button{padding:10px 20px;border-radius:8px;border:1px solid rgba(15,23,32,0.06);background:var(--card);color:var(--text);font-weight:700}
+
+/* Center modal content and icon */
+.modal-content{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:28px}
+.confirm-icon{width:140px;height:140px;display:flex;align-items:center;justify-content:center}
+.confirm-icon svg{width:120px;height:120px}
+.modal-close{right:16px;top:12px}
+.confirm-actions button{min-width:84px}

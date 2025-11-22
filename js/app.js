@@ -12,6 +12,8 @@ const canvas = document.getElementById('canvas');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const fileInput = document.getElementById('fileInput');
+const startOverlay = document.getElementById('startOverlay');
+const startCameraBtn = document.getElementById('startCameraBtn');
 
 const tabs = document.querySelectorAll('.tab');
 const scanView = document.getElementById('scanView');
@@ -50,7 +52,10 @@ function showView(name) {
   tabs.forEach(t => t.classList.toggle('active', t.dataset.view === name));
   // start camera when entering scan view, stop when leaving
   if (name === 'scan') {
-    startCamera();
+    // try to start camera; if blocked, show start overlay
+    startCamera().catch(() => {
+      if (startOverlay) { startOverlay.hidden = false; }
+    });
   } else {
     stopCamera();
   }
@@ -68,8 +73,19 @@ confirmClose.addEventListener('click', () => {
 if (startBtn) startBtn.addEventListener('click', startCamera);
 if (stopBtn) stopBtn.addEventListener('click', stopCamera);
 if (fileInput) fileInput.addEventListener('change', handleFile);
+if (startCameraBtn) startCameraBtn.addEventListener('click', async () => {
+  if (startOverlay) startOverlay.hidden = true;
+  try {
+    await startCamera();
+  } catch (err) {
+    console.error('Start via button failed', err);
+    if (startOverlay) startOverlay.hidden = false;
+  }
+});
 
 async function startCamera() {
+  // guard: don't start twice
+  if (scanning || (stream && stream.active)) return;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
     video.srcObject = stream;
@@ -78,6 +94,9 @@ async function startCamera() {
   if (startBtn) startBtn.disabled = true;
   if (stopBtn) stopBtn.disabled = false;
     scanning = true;
+
+    // hide start overlay if visible
+    if (startOverlay) startOverlay.hidden = true;
 
     // ensure canvas size
     canvas.width = video.videoWidth || 640;
@@ -90,7 +109,10 @@ async function startCamera() {
     }
   } catch (err) {
     console.error('Could not start camera', err);
-    alert('Could not access camera. Try allowing camera permissions or use the file input or manual input as fallback.');
+    // show start overlay so user can try manually
+    if (startOverlay) startOverlay.hidden = false;
+    // rethrow so callers (showView) can handle
+    throw err;
   }
 }
 
@@ -185,12 +207,24 @@ function hideConfirmation() {
   const activeTab = Array.from(tabs).find(t => t.classList.contains('active'));
   if (activeTab && activeTab.dataset.view === 'scan') {
     // slight delay to allow modal to hide
-    setTimeout(() => startCamera(), 250);
+    setTimeout(() => startCamera().catch(() => { if (startOverlay) startOverlay.hidden = false; }), 250);
   }
 }
 
 if (confirmClose) confirmClose.addEventListener('click', hideConfirmation);
 if (confirmOk) confirmOk.addEventListener('click', hideConfirmation);
+
+// also allow clicking on the overlay outside modal to close
+if (confirmModal) {
+  confirmModal.addEventListener('click', (ev) => {
+    if (ev.target === confirmModal) hideConfirmation();
+  });
+}
+
+// allow ESC key to close modal
+window.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape') hideConfirmation();
+});
 
 // --- File input handling (image) ---
 function handleFile(e) {
