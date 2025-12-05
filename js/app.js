@@ -148,12 +148,22 @@ function scanWithJsQR() {
       canvas.height = video.videoHeight || canvas.height;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     }
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    if (window.jsQR) {
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
-      if (code) {
-        if (!processing) handleDetectionFeedback(code.data, 'camera');
-        return;
+    
+    // use Quagga2 to detect barcodes in the canvas
+    if (window.Quagga) {
+      try {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        window.Quagga.decodeSingle({
+          src: canvas.toDataURL(),
+          config: { numOfWorkers: 1, multiple: false, locate: false }
+        }, (res) => {
+          if (res && res.codeResult && res.codeResult.code) {
+            if (!processing) handleDetectionFeedback(res.codeResult.code, 'camera');
+            return;
+          }
+        });
+      } catch (err) {
+        console.error('Quagga error', err);
       }
     }
   } catch (err) {
@@ -284,28 +294,24 @@ window.addEventListener('keydown', (ev) => {
 function handleFile(e) {
   const file = e.target.files && e.target.files[0];
   if (!file) return;
-  const img = new Image();
   const reader = new FileReader();
   reader.onload = function() {
-    img.onload = function() {
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      if (window.jsQR) {
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
-        if (code) {
-          // for file input we also show the brief animation then confirmation
-          if (!processing) {
-            handleDetectionFeedback(code.data, 'file');
-          }
+    const imageSrc = reader.result;
+    // use Quagga2 to decode the barcode from the uploaded image
+    if (window.Quagga) {
+      window.Quagga.decodeSingle({
+        src: imageSrc,
+        config: { numOfWorkers: 1, multiple: false, locate: true }
+      }, (res) => {
+        if (res && res.codeResult && res.codeResult.code) {
+          if (!processing) handleDetectionFeedback(res.codeResult.code, 'file');
           return;
         }
-      }
-      alert('No QR code found in the image.');
-    };
-    img.src = reader.result;
+        alert('No barcode found in the image.');
+      });
+    } else {
+      alert('Barcode detector not available.');
+    }
   };
   reader.readAsDataURL(file);
 }
