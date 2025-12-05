@@ -28,10 +28,10 @@ let rafId = null;
 let barcodeDetector = null;
 let processing = false; // true while running the pre-confirmation animation
 
-// Detect BarcodeDetector API
+// Detect BarcodeDetector API (barcode formats: EAN, UPC, Code128, etc.)
 if ('BarcodeDetector' in window) {
   try {
-    barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+    barcodeDetector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upca', 'code_128', 'code_39'] });
   } catch (e) {
     barcodeDetector = null;
   }
