@@ -1,0 +1,20 @@
+{
+  "name": "paxibox",
+  "version": "1.0.0",
+  "description": "PaxiBox - Box serial number input form with Firebase Realtime Database",
+  "type": "module",
+  "scripts": {
+    "dev": "npx serve .",
+    "start": "npx serve ."
+  },
+  "keywords": [
+    "firebase",
+    "realtime-database",
+    "iot"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "firebase": "^12.6.0"
+  }
+}

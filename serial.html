@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>PaxiBox - Serial Number Input</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    .serial-form-container {
+      background: var(--card);
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(15,23,32,0.04);
+      max-width: 420px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .serial-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .serial-form label {
+      display: flex;
+      flex-direction: column;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .serial-form input {
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(15,23,32,0.1);
+      background: #ffffff;
+      color: var(--text);
+      font-size: 16px;
+      margin-top: 6px;
+    }
+    .serial-form input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(5,150,105,0.1);
+    }
+    .serial-form input:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      background: #f3f4f6;
+    }
+    .serial-form button {
+      padding: 14px 28px;
+      border-radius: 8px;
+      border: 0;
+      background: linear-gradient(180deg, var(--accent), #047857);
+      color: white;
+      font-weight: 700;
+      font-size: 16px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(5,150,105,0.2);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .serial-form button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(5,150,105,0.3);
+    }
+    .serial-form button:active {
+      transform: translateY(0);
+    }
+    .serial-form button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .status-message {
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 12px;
+      text-align: center;
+      font-weight: 600;
+      display: none;
+    }
+    .status-message.success {
+      background: rgba(5,150,105,0.1);
+      color: #047857;
+      display: block;
+    }
+    .status-message.error {
+      background: rgba(239,68,68,0.1);
+      color: #dc2626;
+      display: block;
+    }
+    .status-message.loading {
+      background: rgba(37,99,235,0.1);
+      color: #2563eb;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="app-header">
+      <h1>PaxiBox</h1>
+      <a href="index.html" class="nav-button">Scanner</a>
+    </header>
+
+    <div class="serial-form-container">
+      <h2 style="margin: 0 0 20px 0; text-align: center; color: var(--text); font-size: 1.2rem;">Box Serial Number</h2>
+      <form id="serialForm" class="serial-form">
+        <label>
+          Serial Number
+          <input 
+            id="serialInput" 
+            name="serial" 
+            type="text" 
+            placeholder="Enter box serial number" 
+            required 
+            autocomplete="off"
+          />
+        </label>
+        <button type="submit" id="submitBtn">Submit</button>
+      </form>
+      <div id="statusMessage" class="status-message"></div>
+    </div>
+  </main>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    // Import Firebase modules from SDK v12.6.0
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js';
+    import { getDatabase, ref, push, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js';
+    import { getAnalytics } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-analytics.js';
+
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyCUNxHKkWEc-HQG6ibe8kEtaRFc1eRmRFQ",
+      authDomain: "paxibox.firebaseapp.com",
+      databaseURL: "https://paxibox-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "paxibox",
+      storageBucket: "paxibox.firebasestorage.app",
+      messagingSenderId: "994249307432",
+      appId: "1:994249307432:web:2cf693e9bddc7f9c9ccc1d",
+      measurementId: "G-ZBS33VQ541"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const db = getDatabase(app);
+
+    // Form elements
+    const serialForm = document.getElementById('serialForm');
+    const serialInput = document.getElementById('serialInput');
+    const submitBtn = document.getElementById('submitBtn');
+    const statusMessage = document.getElementById('statusMessage');
+
+    // Enable form now that Firebase is initialized
+    submitBtn.disabled = false;
+    serialInput.disabled = false;
+
+    // Function to show status message
+    function showStatus(message, type) {
+      statusMessage.textContent = message;
+      statusMessage.className = `status-message ${type}`;
+      setTimeout(() => {
+        statusMessage.className = 'status-message';
+      }, 5000);
+    }
+
+    // Handle form submission
+    serialForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const serialNumber = serialInput.value.trim();
+      
+      if (!serialNumber) {
+        showStatus('Please enter a serial number', 'error');
+        return;
+      }
+
+      // Disable submit button
+      submitBtn.disabled = true;
+      showStatus('Submitting...', 'loading');
+
+      try {
+        // Check if Firebase is initialized
+        if (!db) {
+          showStatus('Firebase not initialized. Please refresh the page.', 'error');
+          submitBtn.disabled = false;
+          return;
+        }
+
+        // Push data to Realtime Database
+        const serialDataRef = ref(db, 'boxSerialNumbers');
+        const newSerialRef = await push(serialDataRef, {
+          serialNumber: serialNumber,
+          timestamp: serverTimestamp(),
+          createdAt: new Date().toISOString()
+        });
+
+        console.log('Data written with key: ', newSerialRef.key);
+        
+        // Show success message
+        showStatus('Serial number submitted successfully!', 'success');
+        
+        // Clear input
+        serialInput.value = '';
+        
+        // Re-enable submit button
+        submitBtn.disabled = false;
+      } catch (error) {
+        console.error('Error adding data: ', error);
+        showStatus('Error submitting serial number. Please try again.', 'error');
+        submitBtn.disabled = false;
+      }
+    });
+
+    // Focus on input when page loads
+    serialInput.focus();
+  </script>
+</body>
+</html>
+
