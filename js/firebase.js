@@ -21,22 +21,41 @@
       }
       const db = firebase.firestore();
 
-      // Expose logging function
-      window.paxiLogScan = async function logScan(entry) {
+      // Expose logging function with timeout and diagnostics
+      window.paxiLogScan = async function logScan(entry, opts = {}) {
+        const timeoutMs = typeof opts.timeoutMs === 'number' ? opts.timeoutMs : 10000;
+        const doc = {
+          code: entry.code || null,
+          source: entry.source || null,
+          success: typeof entry.success === 'boolean' ? entry.success : true,
+          ts: entry.timestamp || new Date().toISOString(),
+          meta: entry.meta || null
+        };
+        console.debug('paxiLogScan: attempting to write', { doc, timeoutMs });
         try {
-          const doc = {
-            code: entry.code || null,
-            source: entry.source || null,
-            success: typeof entry.success === 'boolean' ? entry.success : true,
-            ts: entry.timestamp || new Date().toISOString(),
-            meta: entry.meta || null
-          };
-          const res = await db.collection('scans').add(doc);
-          console.debug('Logged scan to Firestore, id=', res.id, doc);
+          const writePromise = db.collection('scans').add(doc);
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('paxiLogScan timeout after ' + timeoutMs + 'ms')), timeoutMs));
+          const res = await Promise.race([writePromise, timeoutPromise]);
+          console.debug('Logged scan to Firestore, id=', res && res.id, doc);
           return res;
         } catch (err) {
-          console.error('Failed to log scan to Firestore', err);
+          console.error('Failed to log scan to Firestore', err, { doc });
           throw err;
+        }
+      };
+
+      // Helper to test Firestore connectivity (writes with timeout)
+      window.paxiTestConnection = async function(timeoutMs = 8000) {
+        try {
+          console.debug('paxiTestConnection: writing healthcheck doc');
+          const writePromise = db.collection('paxi_healthcheck').add({ ts: new Date().toISOString() });
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('paxiTestConnection timeout after ' + timeoutMs + 'ms')), timeoutMs));
+          const res = await Promise.race([writePromise, timeoutPromise]);
+          console.debug('paxiTestConnection OK, id=', res && res.id);
+          return { ok: true, id: res && res.id };
+        } catch (err) {
+          console.error('paxiTestConnection failed', err);
+          return { ok: false, error: err && err.message };
         }
       };
 
