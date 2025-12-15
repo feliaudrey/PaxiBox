@@ -236,13 +236,115 @@ function drawCropToCanvas() {
   }
 }
 
+// --- MQTT Configuration ---
+const MQTT_CONFIG = {
+  broker: 'ws://10.137.152.111:9001', // WebSocket port (default Mosquitto WS port is 9001)
+  fallbackBroker: 'ws://localhost:9001',
+  topics: {
+    esp32s3Command: 'paxibox/esp32s3/command',
+    esp32camCommand: 'paxibox/esp32cam/command'
+  }
+};
+
+let mqttClient = null;
+let mqttConnected = false;
+
+// Initialize MQTT client (using MQTT.js via CDN)
+function initMQTT() {
+  if (typeof mqtt === 'undefined') {
+    console.warn('MQTT.js not loaded. MQTT commands disabled.');
+    return;
+  }
+
+  try {
+    mqttClient = mqtt.connect(MQTT_CONFIG.broker, {
+      clientId: 'paxibox-courier-' + Math.random().toString(16).substr(2, 8),
+      reconnectPeriod: 5000,
+      connectTimeout: 10000
+    });
+
+    mqttClient.on('connect', () => {
+      mqttConnected = true;
+      console.log('MQTT connected to', MQTT_CONFIG.broker);
+    });
+
+    mqttClient.on('error', (err) => {
+      console.error('MQTT error:', err);
+      mqttConnected = false;
+    });
+
+    mqttClient.on('close', () => {
+      mqttConnected = false;
+      console.log('MQTT disconnected');
+    });
+
+    mqttClient.on('offline', () => {
+      mqttConnected = false;
+      console.log('MQTT offline');
+    });
+  } catch (err) {
+    console.error('Failed to initialize MQTT:', err);
+  }
+}
+
+// Send MQTT unlock commands to both ESP32 devices
+async function sendUnlockCommands(resi) {
+  if (!mqttConnected || !mqttClient) {
+    console.warn('MQTT not connected. Trying Firebase fallback...');
+    // Fallback: write to Firebase and let a bridge handle MQTT
+    try {
+      if (window.firebase && window.firebase.database) {
+        const db = window.firebase.database();
+        await db.ref(`paxibox/system/courierUnlockRequest`).set({
+          resi: resi,
+          requestedAt: Date.now()
+        });
+        console.log('Unlock request written to Firebase (bridge will handle MQTT)');
+      }
+    } catch (err) {
+      console.error('Firebase fallback failed:', err);
+    }
+    return;
+  }
+
+  const command = JSON.stringify({ action: 'unlock_courier_door', resi: resi });
+
+  try {
+    // Send to ESP32-S3 (courier door servo)
+    mqttClient.publish(MQTT_CONFIG.topics.esp32s3Command, command, { qos: 1 }, (err) => {
+      if (err) {
+        console.error('Failed to publish to ESP32-S3:', err);
+      } else {
+        console.log('MQTT unlock command sent to ESP32-S3:', command);
+      }
+    });
+
+    // Send to ESP32-CAM (user door solenoid + photo)
+    mqttClient.publish(MQTT_CONFIG.topics.esp32camCommand, command, { qos: 1 }, (err) => {
+      if (err) {
+        console.error('Failed to publish to ESP32-CAM:', err);
+      } else {
+        console.log('MQTT unlock command sent to ESP32-CAM:', command);
+      }
+    });
+  } catch (err) {
+    console.error('Error sending MQTT commands:', err);
+  }
+}
+
 // --- Handle detected input (from camera or file or manual) ---
-function handleDetectedInput(text, source) {
+async function handleDetectedInput(text, source) {
   // Simple validation: consider failure if text is very short
   const trimmed = (text || '').trim();
   const success = trimmed.length >= 3; // adjust as needed
   const title = success ? 'input berhasil' : 'input gagal';
   const message = success ? 'mohon masukkan paket pada box' : 'mohon coba lagi atau cek kembali penerima';
+  
+  // If successful and looks like a valid resi, send MQTT unlock commands
+  if (success && trimmed.length >= 10) {
+    await sendUnlockCommands(trimmed);
+  }
+
   // Log to Firebase (if initialized) but don't block the UI flow.
   try {
     if (window.paxiLogScan) {
