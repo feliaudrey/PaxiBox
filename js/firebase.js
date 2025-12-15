@@ -54,8 +54,19 @@
             // If the code looks like a package resi, update the package node (no auth required per rules)
             if (doc.code && typeof doc.code === 'string') {
               const resi = doc.code.replace(/[^a-zA-Z0-9-_]/g, '');
+              // try to find an existing package keyed differently but with matching serialNumber
+              let pkgKey = resi;
+              try {
+                const snap = await rdb.ref('paxibox/packages').orderByChild('serialNumber').equalTo(resi).limitToFirst(1).once('value');
+                if (snap && snap.exists()) {
+                  const foundKey = Object.keys(snap.val() || {})[0];
+                  if (foundKey) pkgKey = foundKey;
+                }
+              } catch (lookupErr) {
+                console.warn('Package lookup by serialNumber failed; using resi as key', lookupErr);
+              }
               // push a status update under paxibox/packages/$resi/updates
-              const updatesRef = rdb.ref(`paxibox/packages/${resi}/updates`);
+              const updatesRef = rdb.ref(`paxibox/packages/${pkgKey}/updates`);
               const updatePromise = updatesRef.push({
                 status: doc.success ? 'scanned' : 'failed',
                 source: doc.source,
@@ -65,7 +76,7 @@
               // also keep a log under top-level scans for audit
               const scanLogPromise = rdb.ref('scans').push(doc);
               // optionally reflect latest status at the package root
-              const pkgRef = rdb.ref(`paxibox/packages/${resi}`);
+              const pkgRef = rdb.ref(`paxibox/packages/${pkgKey}`);
               const statusPromise = pkgRef.child('status').set(doc.success ? 'delivered' : 'failed');
               const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('paxiLogScan timeout after ' + timeoutMs + 'ms')), timeoutMs));
               const res = await Promise.race([Promise.all([updatePromise, scanLogPromise, statusPromise]), timeoutPromise]);
