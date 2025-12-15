@@ -20,7 +20,6 @@ const closeBtn = document.getElementById('closeBtn');
 
 const manualForm = document.getElementById('manualForm');
 const resiInput = document.getElementById('resiInput');
-const recipientInput = document.getElementById('recipientInput');
 
 let stream = null;
 let scanning = false;
@@ -374,20 +373,16 @@ function handleFile(e) {
 manualForm.addEventListener('submit', (ev) => {
   ev.preventDefault();
   const resi = resiInput.value.trim();
-  const recipient = recipientInput.value.trim();
   if (!resi) {
     alert('Mohon masukkan nomor resi');
     return;
   }
-  // Here we can validate or send to server. For now, treat as success if resi length ok
-  const combined = `${resi} | ${recipient}`;
   // switch to scan view so modal close will restart camera, then play detection feedback
   showView('scan');
   // clear manual inputs so they don't linger
   resiInput.value = '';
-  recipientInput.value = '';
   // Play detection feedback before showing confirmation
-  if (!processing) handleDetectionFeedback(combined, 'manual');
+  if (!processing) handleDetectionFeedback(resi, 'manual');
 });
 
 // Cleanup
