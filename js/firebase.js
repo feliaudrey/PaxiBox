@@ -19,6 +19,21 @@
       if (!firebase.apps || !firebase.apps.length) {
         firebase.initializeApp(cfg);
       }
+      // Prepare anonymous auth (if Auth SDK is loaded). We'll await this before writes.
+      let authReady = Promise.resolve();
+      if (firebase.auth) {
+        try {
+          authReady = firebase.auth().signInAnonymously()
+            .then((cred) => {
+              console.debug('Firebase anonymous sign-in succeeded', cred && cred.user && cred.user.uid);
+            })
+            .catch((err) => {
+              console.warn('Firebase anonymous sign-in failed', err && err.message);
+            });
+        } catch (e) {
+          console.warn('Firebase auth unavailable', e && e.message);
+        }
+      }
       // Prefer Realtime Database if `databaseURL` present; otherwise fall back to Firestore.
       if (cfg && cfg.databaseURL && firebase.database) {
         const rdb = firebase.database();
@@ -33,6 +48,8 @@
             meta: entry.meta || null
           };
           console.debug('paxiLogScan (RTDB): attempting to write', { doc, timeoutMs });
+          // ensure auth attempt has completed (if available)
+          try { await authReady; } catch (e) { /* ignore */ }
           try {
             // If the code looks like a package resi, update the package node (no auth required per rules)
             if (doc.code && typeof doc.code === 'string') {
@@ -67,7 +84,9 @@
         window.paxiTestConnection = async function(timeoutMs = 8000) {
           try {
             console.debug('paxiTestConnection (RTDB): writing healthcheck');
-            const writePromise = rdb.ref('paxi_healthcheck').push({ ts: new Date().toISOString() });
+            // use paxibox/system/healthcheck which aligns with package/system rules
+            try { await authReady; } catch (e) { /* ignore */ }
+            const writePromise = rdb.ref('paxibox/system/healthcheck').push({ ts: new Date().toISOString() });
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('paxiTestConnection timeout after ' + timeoutMs + 'ms')), timeoutMs));
             const res = await Promise.race([writePromise, timeoutPromise]);
             console.debug('paxiTestConnection OK (RTDB), key=', res && res.key);
