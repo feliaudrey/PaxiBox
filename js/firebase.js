@@ -56,14 +56,24 @@
               const resi = doc.code.replace(/[^a-zA-Z0-9-_]/g, '');
               // try to find an existing package keyed differently but with matching serialNumber
               let pkgKey = resi;
+              let foundPackageBySerial = false;
               try {
                 const snap = await rdb.ref('paxibox/packages').orderByChild('serialNumber').equalTo(resi).limitToFirst(1).once('value');
                 if (snap && snap.exists()) {
                   const foundKey = Object.keys(snap.val() || {})[0];
-                  if (foundKey) pkgKey = foundKey;
+                  if (foundKey) {
+                    pkgKey = foundKey;
+                    foundPackageBySerial = true;
+                  }
                 }
               } catch (lookupErr) {
                 console.warn('Package lookup by serialNumber failed; using resi as key', lookupErr);
+              }
+              console.debug('paxiLogScan: resolved pkgKey', { resi, pkgKey, foundPackageBySerial });
+
+              // If we require pre-created packages, abort when not found to avoid permission_denied
+              if (!foundPackageBySerial) {
+                throw new Error(`Package with serialNumber ${resi} not found (pre-created packages required)`);
               }
               // push a status update under paxibox/packages/$resi/updates
               const updatesRef = rdb.ref(`paxibox/packages/${pkgKey}/updates`);
