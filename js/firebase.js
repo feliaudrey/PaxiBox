@@ -19,45 +19,84 @@
       if (!firebase.apps || !firebase.apps.length) {
         firebase.initializeApp(cfg);
       }
-      const db = firebase.firestore();
+      // Prefer Realtime Database if `databaseURL` present; otherwise fall back to Firestore.
+      if (cfg && cfg.databaseURL && firebase.database) {
+        const rdb = firebase.database();
 
-      // Expose logging function with timeout and diagnostics
-      window.paxiLogScan = async function logScan(entry, opts = {}) {
-        const timeoutMs = typeof opts.timeoutMs === 'number' ? opts.timeoutMs : 10000;
-        const doc = {
-          code: entry.code || null,
-          source: entry.source || null,
-          success: typeof entry.success === 'boolean' ? entry.success : true,
-          ts: entry.timestamp || new Date().toISOString(),
-          meta: entry.meta || null
+        window.paxiLogScan = async function logScan(entry, opts = {}) {
+          const timeoutMs = typeof opts.timeoutMs === 'number' ? opts.timeoutMs : 10000;
+          const doc = {
+            code: entry.code || null,
+            source: entry.source || null,
+            success: typeof entry.success === 'boolean' ? entry.success : true,
+            ts: entry.timestamp || new Date().toISOString(),
+            meta: entry.meta || null
+          };
+          console.debug('paxiLogScan (RTDB): attempting to write', { doc, timeoutMs });
+          try {
+            const writePromise = rdb.ref('scans').push(doc);
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('paxiLogScan timeout after ' + timeoutMs + 'ms')), timeoutMs));
+            const res = await Promise.race([writePromise, timeoutPromise]);
+            console.debug('Logged scan to RTDB, key=', res && res.key, doc);
+            return res;
+          } catch (err) {
+            console.error('Failed to log scan to RTDB', err, { doc });
+            throw err;
+          }
         };
-        console.debug('paxiLogScan: attempting to write', { doc, timeoutMs });
-        try {
-          const writePromise = db.collection('scans').add(doc);
-          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('paxiLogScan timeout after ' + timeoutMs + 'ms')), timeoutMs));
-          const res = await Promise.race([writePromise, timeoutPromise]);
-          console.debug('Logged scan to Firestore, id=', res && res.id, doc);
-          return res;
-        } catch (err) {
-          console.error('Failed to log scan to Firestore', err, { doc });
-          throw err;
-        }
-      };
 
-      // Helper to test Firestore connectivity (writes with timeout)
-      window.paxiTestConnection = async function(timeoutMs = 8000) {
-        try {
-          console.debug('paxiTestConnection: writing healthcheck doc');
-          const writePromise = db.collection('paxi_healthcheck').add({ ts: new Date().toISOString() });
-          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('paxiTestConnection timeout after ' + timeoutMs + 'ms')), timeoutMs));
-          const res = await Promise.race([writePromise, timeoutPromise]);
-          console.debug('paxiTestConnection OK, id=', res && res.id);
-          return { ok: true, id: res && res.id };
-        } catch (err) {
-          console.error('paxiTestConnection failed', err);
-          return { ok: false, error: err && err.message };
-        }
-      };
+        window.paxiTestConnection = async function(timeoutMs = 8000) {
+          try {
+            console.debug('paxiTestConnection (RTDB): writing healthcheck');
+            const writePromise = rdb.ref('paxi_healthcheck').push({ ts: new Date().toISOString() });
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('paxiTestConnection timeout after ' + timeoutMs + 'ms')), timeoutMs));
+            const res = await Promise.race([writePromise, timeoutPromise]);
+            console.debug('paxiTestConnection OK (RTDB), key=', res && res.key);
+            return { ok: true, id: res && res.key };
+          } catch (err) {
+            console.error('paxiTestConnection (RTDB) failed', err);
+            return { ok: false, error: err && err.message };
+          }
+        };
+      } else {
+        // fallback to Firestore if RTDB not available
+        const db = firebase.firestore();
+        window.paxiLogScan = async function logScan(entry, opts = {}) {
+          const timeoutMs = typeof opts.timeoutMs === 'number' ? opts.timeoutMs : 10000;
+          const doc = {
+            code: entry.code || null,
+            source: entry.source || null,
+            success: typeof entry.success === 'boolean' ? entry.success : true,
+            ts: entry.timestamp || new Date().toISOString(),
+            meta: entry.meta || null
+          };
+          console.debug('paxiLogScan (Firestore): attempting to write', { doc, timeoutMs });
+          try {
+            const writePromise = db.collection('scans').add(doc);
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('paxiLogScan timeout after ' + timeoutMs + 'ms')), timeoutMs));
+            const res = await Promise.race([writePromise, timeoutPromise]);
+            console.debug('Logged scan to Firestore, id=', res && res.id, doc);
+            return res;
+          } catch (err) {
+            console.error('Failed to log scan to Firestore', err, { doc });
+            throw err;
+          }
+        };
+
+        window.paxiTestConnection = async function(timeoutMs = 8000) {
+          try {
+            console.debug('paxiTestConnection (Firestore): writing healthcheck doc');
+            const writePromise = db.collection('paxi_healthcheck').add({ ts: new Date().toISOString() });
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('paxiTestConnection timeout after ' + timeoutMs + 'ms')), timeoutMs));
+            const res = await Promise.race([writePromise, timeoutPromise]);
+            console.debug('paxiTestConnection OK (Firestore), id=', res && res.id);
+            return { ok: true, id: res && res.id };
+          } catch (err) {
+            console.error('paxiTestConnection (Firestore) failed', err);
+            return { ok: false, error: err && err.message };
+          }
+        };
+      }
 
       console.debug('Firebase initialized for PaxiBox');
     } catch (err) {
