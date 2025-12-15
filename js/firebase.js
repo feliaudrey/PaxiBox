@@ -64,8 +64,11 @@
               });
               // also keep a log under top-level scans for audit
               const scanLogPromise = rdb.ref('scans').push(doc);
+              // optionally reflect latest status at the package root
+              const pkgRef = rdb.ref(`paxibox/packages/${resi}`);
+              const statusPromise = pkgRef.child('status').set(doc.success ? 'delivered' : 'failed');
               const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('paxiLogScan timeout after ' + timeoutMs + 'ms')), timeoutMs));
-              const res = await Promise.race([Promise.all([updatePromise, scanLogPromise]), timeoutPromise]);
+              const res = await Promise.race([Promise.all([updatePromise, scanLogPromise, statusPromise]), timeoutPromise]);
               console.debug('Updated package and logged scan (RTDB)', res, doc);
               return res;
             }
