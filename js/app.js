@@ -152,11 +152,25 @@ function scanWithJsQR() {
     // use Quagga2 to detect barcodes in the canvas
     if (window.Quagga) {
       try {
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        // Use Quagga.decodeSingle with the proper config shape and readers for 1D barcodes.
+        // Important: Quagga expects decoder readers in `decoder.readers` and top-level flags
+        // such as `numOfWorkers` and `locate` at the root of the config object.
         window.Quagga.decodeSingle({
           src: canvas.toDataURL(),
-          config: { numOfWorkers: 1, multiple: false, locate: false }
+          numOfWorkers: 0,
+          locate: true,
+          // recommended readers for common 1D barcodes
+          decoder: {
+            readers: [
+              'code_128_reader',
+              'ean_reader',
+              'ean_8_reader',
+              'upc_reader',
+              'code_39_reader'
+            ]
+          }
         }, (res) => {
+          console.debug('Quagga.decodeSingle (camera) result:', res);
           if (res && res.codeResult && res.codeResult.code) {
             if (!processing) handleDetectionFeedback(res.codeResult.code, 'camera');
             return;
@@ -301,8 +315,19 @@ function handleFile(e) {
     if (window.Quagga) {
       window.Quagga.decodeSingle({
         src: imageSrc,
-        config: { numOfWorkers: 1, multiple: false, locate: true }
+        numOfWorkers: 0,
+        locate: true,
+        decoder: {
+          readers: [
+            'code_128_reader',
+            'ean_reader',
+            'ean_8_reader',
+            'upc_reader',
+            'code_39_reader'
+          ]
+        }
       }, (res) => {
+        console.debug('Quagga.decodeSingle (file) result:', res);
         if (res && res.codeResult && res.codeResult.code) {
           if (!processing) handleDetectionFeedback(res.codeResult.code, 'file');
           return;
