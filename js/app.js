@@ -229,6 +229,16 @@ function handleDetectedInput(text, source) {
   const success = trimmed.length >= 3; // adjust as needed
   const title = success ? 'input berhasil' : 'input gagal';
   const message = success ? 'mohon masukkan paket pada box' : 'mohon coba lagi atau cek kembali penerima';
+  // Log to Firebase (if initialized) but don't block the UI flow.
+  try {
+    if (window.paxiLogScan) {
+      window.paxiLogScan({ code: trimmed, source: source || 'unknown', success, timestamp: new Date().toISOString() })
+        .catch(err => console.warn('paxiLogScan failed', err));
+    }
+  } catch (err) {
+    console.warn('paxiLogScan threw', err);
+  }
+
   // direct path for callers that want immediate confirmation
   showConfirmation(success, title, message, trimmed, source);
 }
