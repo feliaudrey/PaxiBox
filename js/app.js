@@ -75,6 +75,12 @@ if (startCameraBtn) startCameraBtn.addEventListener('click', async () => {
   }
 });
 
+function isLikelyResi(text) {
+  const s = (text || '').trim();
+  // Require at least 10 chars and at least one letter to avoid short numeric-only barcodes being treated as resi
+  return s.length >= 10 && /[a-zA-Z]/.test(s);
+}
+
 async function startCamera() {
   // guard: don't start twice
   if (scanning || (stream && stream.active)) return;
@@ -125,7 +131,12 @@ async function scanWithBarcodeDetector() {
       const detections = await barcodeDetector.detect(canvas);
       if (detections && detections.length) {
         const raw = detections[0].rawValue;
-        if (!processing) handleDetectionFeedback(raw, 'camera');
+        if (isLikelyResi(raw)) {
+          if (!processing) handleDetectionFeedback(raw, 'camera');
+          return;
+        } else {
+          console.debug('Ignoring detection not matching resi pattern', raw);
+        }
         return;
       }
     }
@@ -172,8 +183,12 @@ function scanWithJsQR() {
         }, (res) => {
           console.debug('Quagga.decodeSingle (camera) result:', res);
           if (res && res.codeResult && res.codeResult.code) {
-            if (!processing) handleDetectionFeedback(res.codeResult.code, 'camera');
-            return;
+            const code = res.codeResult.code;
+            if (isLikelyResi(code)) {
+              if (!processing) handleDetectionFeedback(code, 'camera');
+              return;
+            }
+            console.debug('Ignoring detection not matching resi pattern', code);
           }
         });
       } catch (err) {
@@ -339,8 +354,12 @@ function handleFile(e) {
       }, (res) => {
         console.debug('Quagga.decodeSingle (file) result:', res);
         if (res && res.codeResult && res.codeResult.code) {
-          if (!processing) handleDetectionFeedback(res.codeResult.code, 'file');
-          return;
+          const code = res.codeResult.code;
+          if (isLikelyResi(code)) {
+            if (!processing) handleDetectionFeedback(code, 'file');
+            return;
+          }
+          console.debug('Ignoring detection not matching resi pattern', code);
         }
         alert('No barcode found in the image.');
       });
