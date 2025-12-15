@@ -34,6 +34,25 @@
           };
           console.debug('paxiLogScan (RTDB): attempting to write', { doc, timeoutMs });
           try {
+            // If the code looks like a package resi, update the package node (no auth required per rules)
+            if (doc.code && typeof doc.code === 'string') {
+              const resi = doc.code.replace(/[^a-zA-Z0-9-_]/g, '');
+              // push a status update under paxibox/packages/$resi/updates
+              const updatesRef = rdb.ref(`paxibox/packages/${resi}/updates`);
+              const updatePromise = updatesRef.push({
+                status: doc.success ? 'scanned' : 'failed',
+                source: doc.source,
+                ts: doc.ts,
+                meta: doc.meta || null
+              });
+              // also keep a log under top-level scans for audit
+              const scanLogPromise = rdb.ref('scans').push(doc);
+              const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('paxiLogScan timeout after ' + timeoutMs + 'ms')), timeoutMs));
+              const res = await Promise.race([Promise.all([updatePromise, scanLogPromise]), timeoutPromise]);
+              console.debug('Updated package and logged scan (RTDB)', res, doc);
+              return res;
+            }
+            // fallback: just write to scans
             const writePromise = rdb.ref('scans').push(doc);
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('paxiLogScan timeout after ' + timeoutMs + 'ms')), timeoutMs));
             const res = await Promise.race([writePromise, timeoutPromise]);
