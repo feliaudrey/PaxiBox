@@ -239,16 +239,28 @@ function drawCropToCanvas() {
 // Send unlock request to Firebase (bridge will forward to MQTT)
 async function sendUnlockCommands(resi) {
   try {
-    if (window.firebase && window.firebase.database) {
-      const db = window.firebase.database();
-      await db.ref(`paxibox/system/courierUnlockRequest`).set({
-        resi: resi,
-        requestedAt: Date.now()
-      });
-      console.log('Courier unlock request written to Firebase (bridge will handle MQTT)');
-    } else {
+    if (!window.firebase || !window.firebase.database) {
       console.warn('Firebase not available. Cannot send unlock request.');
+      return;
     }
+
+    const db = window.firebase.database();
+    
+    // First, check if package exists in Firebase
+    const pkgRef = db.ref(`paxibox/packages/${resi}`);
+    const pkgSnapshot = await pkgRef.once('value');
+    
+    if (!pkgSnapshot.exists()) {
+      console.warn(`Package ${resi} not found in Firebase. Cannot unlock.`);
+      return;
+    }
+
+    // Package exists, send unlock request
+    await db.ref(`paxibox/system/courierUnlockRequest`).set({
+      resi: resi,
+      requestedAt: Date.now()
+    });
+    console.log('Courier unlock request written to Firebase (bridge will handle MQTT)');
   } catch (err) {
     console.error('Failed to write unlock request to Firebase:', err);
   }
